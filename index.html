@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="سجل الدرجات">
+<meta name="theme-color" content="#8a5a14">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>سجل درجات اللغة العربية</title>
+<style>
+:root{--bg:#f6f1e3;--card:#fffdf6;--ink:#2a2418;--mut:#7a6f55;--line:#d9cfb4;--acc:#8a5a14;--ok:#1f7a45;--bad:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1812;--card:#242018;--ink:#f0e9d6;--mut:#a89c80;--line:#403a2b;--acc:#e0a94f;--ok:#58c487;--bad:#ff8a80}}
+:root[data-theme="dark"]{--bg:#1b1812;--card:#242018;--ink:#f0e9d6;--mut:#a89c80;--line:#403a2b;--acc:#e0a94f;--ok:#58c487;--bad:#ff8a80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",Arial,sans-serif;padding:12px}
+h1{font-size:20px;margin:4px 0 12px;color:var(--acc)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:10px;font:inherit;cursor:pointer}
+.tab.on{background:var(--acc);color:var(--card);border-color:var(--acc);font-weight:700}
+.tabs.sm .tab{padding:6px 10px;font-size:14px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.btn{border:1px solid var(--acc);background:transparent;color:var(--acc);padding:8px 14px;border-radius:10px;font:inherit;cursor:pointer}
+.btn.fill{background:var(--acc);color:var(--card)}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{border:1px solid var(--line);padding:0;text-align:center}
+th{background:var(--bg);font-size:13px;padding:6px 4px;white-space:nowrap}
+th small{display:block;color:var(--mut);font-weight:400}
+td input{width:100%;border:0;background:transparent;color:var(--ink);font:inherit;text-align:center;padding:9px 4px;outline:none}
+td input:focus{background:var(--bg)}
+td.nm input{text-align:right;padding-inline:8px;min-width:130px}
+td.tot{font-weight:700;padding:0 8px}
+td.idx{color:var(--mut);width:34px}
+td.x button{border:0;background:none;color:var(--bad);font-size:18px;cursor:pointer;padding:4px 8px}
+.low{color:var(--bad)}.hi{color:var(--ok)}
+.plus{width:100%;border:0;background:transparent;color:var(--acc);font-size:26px;line-height:1;padding:8px;cursor:pointer}
+.plus:hover{background:var(--bg)}
+.sel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.sel select{flex:1;min-width:105px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-weight:700}
+.mx{width:46px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--acc);font:inherit;text-align:center;padding:2px}
+.hint{color:var(--mut);font-size:13px;margin-top:8px}
+@media print{.tabs,.bar,.x,.addrow,.hint,h1+*{display:none!important}.wrap{border:0}body{background:#fff;color:#000}}
+</style>
+</head>
+<body>
+<h1>📒 سجل درجات اللغة العربية</h1>
+<div class="sel">
+  <select id="grs" onchange="D.c=+this.value;render();save()"></select>
+  <select id="secs" onchange="D.s=+this.value;render();save()"></select>
+  <select id="mons" onchange="D.m=+this.value;render();save()"></select>
+</div>
+<div class="bar">
+  <button class="btn" id="ren">✏️ تغيير اسم الصف/الشعبة/الشهر</button>
+  <button class="btn" id="prt">🖨️ طباعة</button>
+  <button class="btn" id="exp">💾 نسخة احتياطية</button>
+  <button class="btn" id="imp">📂 استرجاع نسخة</button>
+  <input type="file" id="impf" accept=".json,application/json" hidden>
+</div>
+<div class="wrap"><table id="tbl"></table></div>
+<div class="hint">اضغط على الرقم تحت اسم كل مادة لتغيير درجتها العظمى، والمجموع يتحدث تلقائياً. تُحفظ البيانات تلقائياً في هذا المتصفح. أسماء الطلاب تنتقل مع كل الأشهر في نفس الشعبة.</div>
+<script>
+const SUBJ=["قواعد","محادثة وتعبير","قراءة","محفوظات","إملاء","خط"];
+let MAX=[30,30,10,10,10,10];
+const KEY="arabic-grades-v2";
+let D=null;
+try{D=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!D){D={s:0,m:0,secs:[0,1,2].map(i=>({name:"الشعبة "+["أ","ب","ج"][i],mons:["الشهر الأول","الشهر الثاني","الشهر الثالث","الشهر الرابع","الشهر الخامس","الشهر السادس"],st:[]}))}}
+const newSecs=()=>[0,1,2].map(i=>({name:"الشعبة "+["أ","ب","ج"][i],mons:["الشهر الأول","الشهر الثاني","الشهر الثالث","الشهر الرابع","الشهر الخامس","الشهر السادس"],st:[]}));
+if(!D.grades){const old=D.secs;D.grades=["الأول","الثاني","الثالث","الرابع","الخامس","السادس"].map((n,i)=>({name:"الصف "+n,secs:i==0?old:newSecs()}));D.c=0;delete D.secs}
+Object.defineProperty(D,"secs",{get(){return D.grades[D.c].secs}});
+if(D.max)MAX=D.max;else D.max=MAX;
+D.secs.forEach(x=>{if(x.mons.length<6)x.mons.push("الشهر السادس")});
+function save(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}}
+const $=id=>document.getElementById(id);
+function tot(a){return a.reduce((x,y)=>x+(+y||0),0)}
+function cls(t){return t<tot(MAX)*.5?"low":t>=tot(MAX)*.8?"hi":""}
+function render(){
+  const sec=D.secs[D.s];
+  $("grs").innerHTML=D.grades.map((x,i)=>`<option value="${i}" ${i==D.c?"selected":""}>${x.name}</option>`).join("");
+  $("secs").innerHTML=D.secs.map((x,i)=>`<option value="${i}" ${i==D.s?"selected":""}>${x.name}</option>`).join("");
+  $("mons").innerHTML=sec.mons.map((x,i)=>`<option value="${i}" ${i==D.m?"selected":""}>${x}</option>`).join("");
+  let h=`<tr><th>ت</th><th>اسم الطالب</th>${SUBJ.map((s,j)=>`<th>${s}<small><input class="mx" type="number" min="1" value="${MAX[j]}" onchange="setMax(${j},this.value)"></small></th>`).join("")}<th>المجموع<small>${tot(MAX)}</small></th><th class="x"></th></tr>`;
+  sec.st.forEach((s,i)=>{
+    const sc=s.m[D.m]||(s.m[D.m]=Array(6).fill(""));
+    const t=tot(sc);
+    h+=`<tr><td class="idx">${i+1}</td><td class="nm"><input value="${s.n.replace(/"/g,"&quot;")}" oninput="D.secs[D.s].st[${i}].n=this.value;save()" placeholder="اسم الطالب"></td>`+
+    sc.map((v,j)=>`<td><input type="number" inputmode="decimal" min="0" max="${MAX[j]}" step="0.5" value="${v}" oninput="setv(${i},${j},this)"></td>`).join("")+
+    `<td class="tot ${cls(t)}" id="t${i}">${t}</td><td class="x"><button onclick="del(${i})" title="حذف">×</button></td></tr>`;
+  });
+  if(!sec.st.length)h+=`<tr><td colspan="10" style="padding:20px;color:var(--mut)">لا يوجد طلاب بعد — اضغط «إضافة طالب»</td></tr>`;
+  h+=`<tr class="addrow"><td colspan="10"><button class="plus" onclick="addSt()" title="إضافة طالب">+</button></td></tr>`;
+  $("tbl").innerHTML=h;
+}
+function setv(i,j,el){
+  let v=el.value;
+  if(v!==""){v=Math.max(0,Math.min(MAX[j],+v));if(+el.value>MAX[j]){el.value=MAX[j]}}
+  const s=D.secs[D.s].st[i];s.m[D.m][j]=v;
+  const t=tot(s.m[D.m]),c=$("t"+i);c.textContent=t;c.className="tot "+cls(t);save();
+}
+function del(i){if(confirm("حذف هذا الطالب من كل الأشهر؟")){D.secs[D.s].st.splice(i,1);save();render()}}
+function setMax(j,v){MAX[j]=Math.max(1,+v||1);D.max=MAX;save();render()}
+function addSt(){D.secs[D.s].st.push({n:"",m:{}});save();render();const r=document.querySelectorAll(".nm input");r[r.length-1].focus()}
+$("prt").onclick=()=>window.print();
+$("ren").onclick=()=>{
+  const g=prompt("اسم الصف:",D.grades[D.c].name);if(g)D.grades[D.c].name=g;
+  const a=prompt("اسم الشعبة:",D.secs[D.s].name);if(a)D.secs[D.s].name=a;
+  const b=prompt("اسم الشهر:",D.secs[D.s].mons[D.m]);if(b)D.secs[D.s].mons[D.m]=b;
+  save();render();
+};
+render();
+$("exp").onclick=async()=>{
+  const name="سجل-درجات-"+new Date().toISOString().slice(0,10)+".json";
+  const file=new File([JSON.stringify(D)],name,{type:"application/json"});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return}}catch(e){if(e&&e.name==="AbortError")return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+};
+$("imp").onclick=()=>$("impf").click();
+$("impf").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const o=JSON.parse(r.result);
+      if(!o||!Array.isArray(o.grades)||!o.grades.every(g=>g&&Array.isArray(g.secs)))throw 0;
+      if(!confirm("سيتم استبدال كل البيانات الحالية بالنسخة المحفوظة. متأكد؟"))return;
+      localStorage.setItem(KEY,r.result);location.reload();
+    }catch(err){alert("الملف غير صالح")}
+  };
+  r.readAsText(f);e.target.value="";
+};
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
